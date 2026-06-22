@@ -1,0 +1,189 @@
+{% extends "capteurs_app/base.html" %}
+
+{# Fonctionnalité 3 : Chart.js chargé uniquement sur cette page via le bloc extra_head #}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block title %}{{ capteur.nom }} — SAE204{% endblock %}
+
+{% block content %}
+<h2>{{ capteur.nom }} <span class="badge">{{ capteur.id_capteur }}</span></h2>
+
+{# ── Formulaire de modification ─────────────────────────────────────────── #}
+<div class="card">
+    <h3>Modifier le capteur</h3>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-group">
+                {{ form.nom.label_tag }}
+                {{ form.nom }}
+                {% if form.nom.errors %}
+                    <span style="color:red;font-size:.8rem">{{ form.nom.errors.0 }}</span>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.emplacement.label_tag }}
+                {{ form.emplacement }}
+                {% if form.emplacement.errors %}
+                    <span style="color:red;font-size:.8rem">{{ form.emplacement.errors.0 }}</span>
+                {% endif %}
+            </div>
+            <button type="submit" class="btn">Enregistrer</button>
+        </div>
+    </form>
+</div>
+
+{# ── Infos capteur ──────────────────────────────────────────────────────── #}
+<div class="card">
+    <h3>Infos capteur</h3>
+    <table>
+        <tr><th>Pièce</th><td>{{ capteur.piece }}</td></tr>
+        <tr><th>Emplacement</th><td>{{ capteur.emplacement|default:"—" }}</td></tr>
+    </table>
+</div>
+
+{# ── Filtres + bouton CSV ───────────────────────────────────────────────── #}
+<h2>Mesures</h2>
+
+<form method="get" class="filter-bar">
+    <label>
+        Date début
+        <input type="date" name="date_debut" value="{{ date_debut }}">
+    </label>
+    <label>
+        Date fin
+        <input type="date" name="date_fin" value="{{ date_fin }}">
+    </label>
+    <button type="submit" class="btn">Filtrer</button>
+    {% if date_debut or date_fin %}
+        <a href="{% url 'capteurs_app:detail_capteur' capteur.id_capteur %}" class="btn btn-secondary">Réinitialiser</a>
+    {% endif %}
+
+    {# Fonctionnalité 2 : lien CSV — transmet les mêmes filtres que l'affichage #}
+    <a href="{% url 'capteurs_app:export_csv' capteur.id_capteur %}?date_debut={{ date_debut }}&date_fin={{ date_fin }}"
+       class="btn" style="background:#28a745;margin-left:auto;">
+        ⬇ Exporter en CSV
+    </a>
+</form>
+
+{# Fonctionnalité 1 : température moyenne des mesures affichées #}
+{% if mesures %}
+<div class="card" style="padding:12px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+    <span style="font-size:.9rem;color:#555;">Température moyenne sur la période :</span>
+    {% if temp_moyenne %}
+        <strong style="font-size:1.2rem;color:#1a73e8;">{{ temp_moyenne|floatformat:2 }} °C</strong>
+    {% else %}
+        <span style="color:#888;">—</span>
+    {% endif %}
+</div>
+
+{# Fonctionnalité 3 : graphique Chart.js #}
+<div class="card" style="margin-bottom:24px;">
+    <h3>Évolution de la température</h3>
+    <canvas id="chartTemperature" height="80"></canvas>
+</div>
+
+{# Tableau des mesures #}
+<table>
+    <thead>
+        <tr>
+            <th>Horodatage</th>
+            <th>Température (°C)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for mesure in mesures %}
+        <tr>
+            <td>{{ mesure.horodatage|date:"d/m/Y H:i:s" }}</td>
+            <td>{{ mesure.temperature }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% else %}
+<p class="empty">Aucune mesure{% if date_debut or date_fin %} sur cette période{% endif %}.</p>
+{% endif %}
+
+{# ── Fonctionnalité 4 : rafraîchissement automatique ──────────────────── #}
+<div class="card" style="margin-top:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span style="font-size:.9rem;color:#555;">Rafraîchissement auto :</span>
+    <label style="font-size:.85rem;color:#555;display:flex;align-items:center;gap:6px;">
+        Toutes les
+        <input type="number" id="refresh-interval" value="30" min="5" max="3600"
+               style="width:70px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;">
+        secondes
+    </label>
+    <button id="btn-toggle-refresh" class="btn" onclick="toggleRefresh()">Désactiver</button>
+    <span id="refresh-status" style="font-size:.82rem;color:#888;">Actif (30s)</span>
+</div>
+
+{# ── Scripts ────────────────────────────────────────────────────────────── #}
+<script>
+// ── Fonctionnalité 3 : graphique Chart.js ────────────────────────────────
+// Les données sont injectées par Django sous forme de tableaux JSON
+const labels = {{ chart_labels|safe }};
+const data   = {{ chart_data|safe }};
+
+if (labels.length > 0) {
+    const ctx = document.getElementById('chartTemperature').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Température (°C)',
+                data: data,
+                borderColor: '#1a73e8',
+                backgroundColor: 'rgba(26,115,232,0.08)',
+                tension: 0.3,      // légère courbe
+                pointRadius: 3,
+                fill: true,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { maxTicksLimit: 12 } },
+                y: { title: { display: true, text: '°C' } }
+            }
+        }
+    });
+}
+
+// ── Fonctionnalité 4 : rafraîchissement automatique ──────────────────────
+let refreshTimer = null;
+
+function startRefresh() {
+    const secondes = parseInt(document.getElementById('refresh-interval').value) || 30;
+    clearInterval(refreshTimer);
+    // setInterval exécute location.reload() toutes les X millisecondes
+    refreshTimer = setInterval(function() { location.reload(); }, secondes * 1000);
+    document.getElementById('refresh-status').textContent = 'Actif (' + secondes + 's)';
+    document.getElementById('btn-toggle-refresh').textContent = 'Désactiver';
+}
+
+function stopRefresh() {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+    document.getElementById('refresh-status').textContent = 'Inactif';
+    document.getElementById('btn-toggle-refresh').textContent = 'Activer';
+}
+
+function toggleRefresh() {
+    if (refreshTimer) { stopRefresh(); } else { startRefresh(); }
+}
+
+// Démarre automatiquement avec la valeur par défaut (30s) au chargement de la page
+startRefresh();
+
+// Redémarre le timer si l'utilisateur change la valeur de l'intervalle
+document.getElementById('refresh-interval').addEventListener('change', function() {
+    if (refreshTimer) { startRefresh(); }
+});
+</script>
+
+{% endblock %}

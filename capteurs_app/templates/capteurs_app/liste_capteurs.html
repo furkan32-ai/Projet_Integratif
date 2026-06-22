@@ -1,0 +1,56 @@
+{% extends "capteurs_app/base.html" %}
+
+{% block title %}Liste des capteurs — SAE204{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <h2 style="margin-bottom:0;">Liste des capteurs</h2>
+
+    {# Bouton suppression — POST pour éviter la suppression accidentelle via un simple lien #}
+    <form method="post" action="{% url 'capteurs_app:supprimer_toutes_mesures' %}"
+          onsubmit="return confirm('Supprimer TOUTES les mesures de la base ? Cette action est irréversible.')">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background:#dc3545;">
+            🗑 Supprimer toutes les mesures
+        </button>
+    </form>
+</div>
+
+<form method="get" class="filter-bar">
+    <label>
+        Rechercher (nom ou ID)
+        <input type="text" name="search" value="{{ search }}" placeholder="ex: salon, CAP01…">
+    </label>
+    <button type="submit" class="btn">Filtrer</button>
+    {% if search %}
+        <a href="{% url 'capteurs_app:liste_capteurs' %}" class="btn btn-secondary">Réinitialiser</a>
+    {% endif %}
+</form>
+
+{% if capteurs %}
+<table>
+    <thead>
+        <tr>
+            <th>ID capteur</th>
+            <th>Nom</th>
+            <th>Pièce</th>
+            <th>Emplacement</th>
+            <th>Mesures</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for capteur in capteurs %}
+        <tr>
+            <td><span class="badge">{{ capteur.id_capteur }}</span></td>
+            <td><a href="{% url 'capteurs_app:detail_capteur' capteur.id_capteur %}">{{ capteur.nom }}</a></td>
+            <td>{{ capteur.piece }}</td>
+            <td>{{ capteur.emplacement|default:"—" }}</td>
+            <td><a href="{% url 'capteurs_app:detail_capteur' capteur.id_capteur %}">Voir →</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">Aucun capteur trouvé{% if search %} pour « {{ search }} »{% endif %}.</p>
+{% endif %}
+{% endblock %}
