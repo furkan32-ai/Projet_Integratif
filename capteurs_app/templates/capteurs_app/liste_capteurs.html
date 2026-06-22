@@ -1,0 +1,45 @@
+{% extends "capteurs_app/base.html" %}
+
+{% block title %}Liste des capteurs — SAE204{% endblock %}
+
+{% block content %}
+<h2>Liste des capteurs</h2>
+
+<form method="get" class="filter-bar">
+    <label>
+        Rechercher (nom ou ID)
+        <input type="text" name="search" value="{{ search }}" placeholder="ex: salon, CAP01…">
+    </label>
+    <button type="submit" class="btn">Filtrer</button>
+    {% if search %}
+        <a href="{% url 'capteurs_app:liste_capteurs' %}" class="btn btn-secondary">Réinitialiser</a>
+    {% endif %}
+</form>
+
+{% if capteurs %}
+<table>
+    <thead>
+        <tr>
+            <th>ID capteur</th>
+            <th>Nom</th>
+            <th>Pièce</th>
+            <th>Emplacement</th>
+            <th>Mesures</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for capteur in capteurs %}
+        <tr>
+            <td><span class="badge">{{ capteur.id_capteur }}</span></td>
+            <td><a href="{% url 'capteurs_app:detail_capteur' capteur.id_capteur %}">{{ capteur.nom }}</a></td>
+            <td>{{ capteur.piece }}</td>
+            <td>{{ capteur.emplacement|default:"—" }}</td>
+            <td><a href="{% url 'capteurs_app:detail_capteur' capteur.id_capteur %}">Voir →</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">Aucun capteur trouvé{% if search %} pour « {{ search }} »{% endif %}.</p>
+{% endif %}
+{% endblock %}
